@@ -1,4 +1,5 @@
-//call like node send_tweet.js TWEET
+#!/usr/bin/env node
+//call like node send_status.js STATUS
 
 
 
@@ -6,13 +7,14 @@ var fs = require('fs');
 
 var _ = require('underscore');
 
-var Twit = require('twit');
+var Mastodon = require('mastodon-api');
+const os = require('os');
+const path = require('path');
 
+const request = require('request');
 var svg2png = require('svg2png');
 var async = require('async');
 var fs = require('fs');
-
-const fetch = require('node-fetch');
 
 _.mixin({
 	guid : function(){
@@ -24,57 +26,46 @@ _.mixin({
 });
 
 
-var send_tweet = function(tweet)
+var send_status = function(status)
 {
 
-	var T = new Twit(
+	var M = new Mastodon(
 	{
-	    consumer_key:         process.env.TWITTER_CONSUMER_KEY
-	  , consumer_secret:      process.env.TWITTER_CONSUMER_SECRET
-	  , access_token:         process.env.ACCESS_TOKEN
-	  , access_token_secret:  process.env.ACCESS_TOKEN_SECRET
+		api_url:		`https://${process.env.INSTANCE_DOMAIN}/api/v1`
+	  , access_token:		process.env.ACCESS_TOKEN
 	}
 	);
 
-	recurse_retry(5, tweet, T);
+	recurse_retry(5, status, M);
 
 }
 
-var generate_svg = function(svg_text, T, cb)
+var generate_svg = function(svg_text, description="", M, cb)
 {
-	
+		let TMP_PATH = path.join(os.tmpdir(), `${_.guid()}.png`);
 		svg2png(new Buffer(svg_text))
-		.then(data => uploadMedia(data.toString('base64'), T, cb))
+		.then(buffer=> fs.writeFileSync(TMP_PATH, buffer))
+		.then( ()=> uploadMedia(fs.createReadStream(TMP_PATH), description, M, cb))
 		.catch(e => cb(e));
 
 }
 
-var fetch_img = async function(url, T, cb)
+var fetch_img = async function(url, description="", M, cb)
 {
-	let response = await fetch(url);
-	if (response.ok)
-	{
-		let buffer = await response.buffer();
-		uploadMedia(buffer.toString('base64'), T, cb); //doesn't allow gifs/movies
-		
-	}
-	else
-	{
-		console.log("Couldn't fetch");
-		process.exit(1);
-	}
+	uploadMedia(request(url), description, M, cb); //doesn't allow gifs/movies...or does it?
 }
 
-var uploadMedia = function(b64data, T, cb)
+var uploadMedia = function(readStream, description="", M, cb)
 {
-	T.post('media/upload', { media_data: b64data }, function (err, data, response) {
+	// M.post('/media', { file: readStream, description: description}, function (err, data, response) {
+	M.post('/media', { file: readStream }, function (err, data, response) {
 		if (err)
 		{
 			cb(err);
 		}
 		else
 		{
-			cb(null, data.media_id_string);
+			cb(null, data.id);
 		}
 	});
 }
@@ -120,7 +111,7 @@ function removeBrackets (text) {
 }
 
 
- var recurse_retry = function(tries_remaining, tweet, T)
+ var recurse_retry = function(tries_remaining, status, M)
 {
 	if (tries_remaining <= 0)
 	{
@@ -131,9 +122,10 @@ function removeBrackets (text) {
 	{
 		try
 		{
-			//console.log(tweet);
-			var tweet_without_image = removeBrackets(tweet);
-			var media_tags = matchBrackets(tweet);
+			// console.log(status);
+			var status_without_image = removeBrackets(status);
+			var media_tags = matchBrackets(status);
+			var cw_label = null;
 			if (media_tags)
 			{
 
@@ -148,12 +140,21 @@ function removeBrackets (text) {
 
 					if (match.indexOf("svg ") === 1)
 					{
-						return _.partial(generate_svg, match.substr(5,match.length - 6), T);
+						return _.partial(generate_svg, match.substr(5,match.length - 6), null, M);
 					}
 					else if (match.indexOf("img ") === 1)
 					{
-						return _.partial(fetch_img, match.substr(5), T);
+						return _.partial(fetch_img, match.substr(5, match.length - 6), null, M);
 					}
+//					else if (match.indexOf("cut ") === 1)
+//					{
+//						cw_label = match.substr(5);
+//					}
+//					else if (match.indexOf("alt ") === 1)
+//					{
+//						// no-op
+//						console.log(`alt text will be: ${match.substr(5, match.length - 6)}`);
+//					}
 					else
 					{
 						return function(cb){
@@ -187,14 +188,14 @@ function removeBrackets (text) {
 				  			
 							console.log("error generating SVG");
 							console.log(err);
-							recurse_retry(tries_remaining - 1, processedGrammar, T);
+							recurse_retry(tries_remaining - 1, status, M);
 							return;
 				  		}
 
 					}
 
-		  			var params = { status: tweet_without_image, media_ids: results };
-					T.post('statuses/update', params, function(err, data, response) {
+		  			var params = { status: status_without_image, media_ids: results, spoiler_text: cw_label, sensitive: process.env.IS_SENSITIVE };
+					M.post('/statuses', params, function(err, data, response) {
 						if (err)
 						{
 						  	if (err["code"] == 186)
@@ -227,8 +228,8 @@ function removeBrackets (text) {
 					  		}
 					  		else
 					  		{
-					  			console.error("twitter returned error " + err['code'] + " " + JSON.stringify(err, null, 2));  
-					  			console.log("twitter returned error " + err['code'] + " : " + err['message']);  
+					  			console.error("mastodon returned error " + err['code'] + " " + JSON.stringify(err, null, 2));  
+					  			console.log("mastodon returned error " + err['code'] + " : " + err['message']);  
 					  			
 						  		process.exit(1);
 					  		}
@@ -242,7 +243,7 @@ function removeBrackets (text) {
 			}
 			else
 			{
-				T.post('statuses/update', { status: tweet }, function(err, data, response) {
+				M.post('/statuses', { status: status }, function(err, data, response) {
 					if (err)
 					{
 					  	if (err["code"] == 186)
@@ -293,9 +294,9 @@ function removeBrackets (text) {
 		{
 			if (tries_remaining <= 4)
 			{
-				console.log("error generating tweet (retrying)\nerror: " + e.stack);
+				console.log("error generating status (retrying)\nerror: " + e.stack);
 			}
-			recurse_retry(tries_remaining - 1, processedGrammar, T);
+			recurse_retry(tries_remaining - 1, status, M);
 		}
 		
 	}
@@ -303,5 +304,5 @@ function removeBrackets (text) {
 };
 
 
-send_tweet(fs.readFileSync('/dev/stdin').toString());
+send_status(fs.readFileSync('/dev/stdin').toString());
 

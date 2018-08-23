@@ -1,20 +1,20 @@
 {
-  "name": "traceryhosting",
+  "name": "traceryhosting-send_status",
   "version": "1.0.0",
-  "description": "A site that hosts Tracery-based Twitterbots",
-  "main": "run_bots.js",
+  "description": "A site that hosts Tracery-based Mastodon bots (on-demand posting from frontend)",
+  "main": "send_status.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "v21",
+  "author": "boodoo",
   "license": "ISC",
   "dependencies": {
     "async": "^1.5.1",
-    "node-fetch": "^2.0.0",
+    "mastodon-api": "^1.3.0",
     "pn": "^1.0.0",
-    "svg2png": "v21/svg2png",
+    "request": "^2.88.0",
+    "svg2png": "github:v21/svg2png",
     "tracery-grammar": "2.7.2",
-    "twit": "^1.1.20",
     "underscore": "^1.8.3"
   }
 }
