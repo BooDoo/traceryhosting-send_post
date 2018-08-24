@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-//call like node send_status.js STATUS
+//call like node send_status.js, then enter STATUS content, then Ctrl+D (<<EOF>>)
 
 
 
