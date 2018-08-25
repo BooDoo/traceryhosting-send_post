@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 //call like node send_status.js, then enter STATUS content, then Ctrl+D (<<EOF>>)
 
-
-
 var fs = require('fs');
 
 var _ = require('underscore');
@@ -166,27 +164,15 @@ function removeBrackets (text) {
 				{
 					if (err)
 					{
-						if (err['code'] == 89)  
+						if (err === undefined)  
 				  		{
-				  			console.log("Account permissions are invalid");
-					  		process.exit(1);
-				  		}
-				  		else if (err['code'] == 226)  
-				  		{
-				  			console.log("Account has been flagged as a bot");
-					  		process.exit(1);
-				  		}
-				  		else if (err['statusCode'] == 404)
-				  		{
-
-				  			console.log("Unknown (statusCode 404) error");
-					  		process.exit(1);
-				  			//unknown error
-				  		}
+							// placeholder for error parsing logic
+							return;
+						}
 				  		else
 				  		{
 				  			
-							console.log("error generating SVG");
+							console.log("error during media_tag parsing/generation");
 							console.log(err);
 							recurse_retry(tries_remaining - 1, status, M);
 							return;
@@ -199,38 +185,15 @@ function removeBrackets (text) {
 					M.post('/statuses', params, function(err, data, response) {
 						if (err)
 						{
-						  	if (err["code"] == 186)
+						  	if (err === undefined)
 						  	{
-						  		console.log("Tweet over 140 characters");
-						  		process.exit(1);
-						  	}
-						  	else if (err['code'] == 187)
-					  		{
-					  			console.log("Tweet a duplicate");
-						  		process.exit(1);
-					  		}
-
-						  	else if (err['code'] == 89)  
-					  		{
-					  			console.log("Account permissions are invalid");
-						  		process.exit(1);
-					  		}
-					  		else if (err['code'] == 226)  
-					  		{
-					  			console.log("Account has been flagged as a bot");
-						  		process.exit(1);
-					  		}
-					  		else if (err['statusCode'] == 404)
-					  		{
-
-					  			console.log("Unknown (statusCode 404) error");
-						  		process.exit(1);
-					  			//unknown error
+								//placeholder for error parsing logic
+								process.exit(1);
 					  		}
 					  		else
 					  		{
-					  			console.error("mastodon returned error " + err['code'] + " " + JSON.stringify(err, null, 2));  
-					  			console.log("mastodon returned error " + err['code'] + " : " + err['message']);  
+					  			console.error("on submitting status with meta, mastodon returned error " + err['code'] + " " + JSON.stringify(err, null, 2));  
+					  			console.log("on submitting status with meta, mastodon returned error " + err['code'] + " : " + err['message']);
 					  			
 						  		process.exit(1);
 					  		}
@@ -249,38 +212,15 @@ function removeBrackets (text) {
 				M.post('/statuses', params, function(err, data, response) {
 					if (err)
 					{
-					  	if (err["code"] == 186)
+					  	if (err === undefined)
 					  	{
-					  		console.log("Tweet over 140 characters");
+					  		//placeholder for error parsing logic
 						  	process.exit(1);
 					  	}
-					  	else if (err['code'] == 187)
-				  		{
-				  			console.log("Tweet a duplicate");
-						  	process.exit(1);
-				  		}
-
-					  	else if (err['code'] == 89)  
-				  		{
-				  			console.log("Account permissions are invalid");
-						  	process.exit(1);
-				  		}
-				  		else if (err['code'] == 226)  
-				  		{
-				  			console.log("Account has been flagged as a bot");
-						  	process.exit(1);
-				  		}
-				  		else if (err['statusCode'] == 404)
-				  		{	
-					  		console.log("Unknown (statusCode 404) error");
-						  	process.exit(1);
-				  			//unknown error
-				  			
-				  		}
 				  		else
 				  		{
-				  			console.error("twitter returned error " + err['code'] + JSON.stringify(err, null, 2));  
-					  		console.log("twitter returned error " + err['code'] + " : " + err['message']);  
+				  			console.error("on submitting plain status, mastodon returned error " + err['code'] + JSON.stringify(err, null, 2));  
+					  		console.log("on submitting plain status, mastodon twitter returned error " + err['code'] + " : " + err['message']);  
 				  			
 						  	process.exit(1);
 				  		}
