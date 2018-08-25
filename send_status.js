@@ -194,7 +194,8 @@ function removeBrackets (text) {
 
 					}
 
-		  			var params = { status: status_without_image, media_ids: results, spoiler_text: cw_label, sensitive: process.env.IS_SENSITIVE };
+		  			var params = { status: status_without_image, media_ids: results, sensitive: process.env.IS_SENSITIVE };
+					if (cw_label !== null) { params['spoiler_text'] = cw_label; }
 					M.post('/statuses', params, function(err, data, response) {
 						if (err)
 						{
@@ -243,7 +244,9 @@ function removeBrackets (text) {
 			}
 			else
 			{
-				M.post('/statuses', { status: status }, function(err, data, response) {
+				let params = { status: status };
+				if (cw_label !== null) { params['spoiler_text'] = cw_label; }
+				M.post('/statuses', params, function(err, data, response) {
 					if (err)
 					{
 					  	if (err["code"] == 186)
