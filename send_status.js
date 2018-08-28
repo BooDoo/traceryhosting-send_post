@@ -3,7 +3,7 @@
 
 var fs = require('fs');
 
-var _ = require('underscore');
+var _ = require('lodash');
 
 var Mastodon = require('mastodon-api');
 const os = require('os');
@@ -38,34 +38,47 @@ var send_status = function(status)
 
 }
 
-var generate_svg = function(svg_text, description="", M, cb)
+var generate_svg = async function(svg_text, description='', M)
 {
 		let TMP_PATH = path.join(os.tmpdir(), `${_.guid()}.png`);
-		svg2png(new Buffer(svg_text))
+		return svg2png(new Buffer(svg_text))
 		.then(buffer=> fs.writeFileSync(TMP_PATH, buffer))
-		.then( ()=> uploadMedia(fs.createReadStream(TMP_PATH), description, M, cb))
-		.catch(e => cb(e));
-
+		.then( ()=> uploadMedia(fs.createReadStream(TMP_PATH), description, M));
 }
 
-var fetch_img = async function(url, description="", M, cb)
+var fetch_img = async function(url, description='', M)
 {
-	uploadMedia(request(url), description, M, cb); //doesn't allow gifs/movies...or does it?
+	return uploadMedia(request(url), description, M); //doesn't allow gifs/movies...or does it?
 }
 
-var uploadMedia = function(readStream, description="", M, cb)
+var uploadMedia = function(readStream, description="", M)
 {
-	// M.post('/media', { file: readStream, description: description}, function (err, data, response) {
-	M.post('/media', { file: readStream }, function (err, data, response) {
-		if (err)
-		{
-			cb(err);
-		}
-		else
-		{
-			cb(null, data.id);
-		}
-	});
+	let params = {file: readStream};
+	if ( description !== "" && description !== null ) {
+		params.description = description;
+	}
+	return M.post('/media', params).then(res=>res.data['id']);
+}
+
+var prepareTag = function(tag) {
+	const knownTags = ["img", "svg", "cut", "alt"];
+	let match = tag.match(/^\{(img|svg|cut|alt) (.+)\}/);
+	if ( match && match[1] && _.includes(knownTags, match[1]) ) {
+		let tagType = match[1];
+		let tagContent = match[2];
+
+		const unescapeOpenBracket = /\\{/g;
+		const unescapeCloseBracket = /\\}/g;
+		tagContent = tagContent.replace(unescapeOpenBracket, "{");
+		tagContent = tagContent.replace(unescapeCloseBracket, "}");
+
+		toReturn = {};
+		toReturn[tagType] = tagContent;
+		return toReturn;
+
+	} else {
+		console.error(`No known action for ${tag.split(' ')[0]}, ignoring`);
+	}
 }
 
 // this is much more complex than i thought it would be
@@ -88,10 +101,9 @@ var matchBrackets = function(text) {
     return null;
   }
   else {
-    return matches.map(reverseString).reverse();
+    return matches.map(reverseString).reverse().map(prepareTag);
   }
 }
-
 
 //see matchBrackets for why this is like this
 function removeBrackets (text) {
@@ -108,8 +120,7 @@ function removeBrackets (text) {
   return reverseString(text.replace(bracketsRe, ""));
 }
 
-
- var recurse_retry = function(tries_remaining, status, M)
+var recurse_retry = function(tries_remaining, status, M)
 {
 	if (tries_remaining <= 0)
 	{
@@ -118,132 +129,77 @@ function removeBrackets (text) {
 	}
 	else
 	{
-		try
-		{
-			// console.log(status);
-			var status_without_image = removeBrackets(status);
-			var media_tags = matchBrackets(status);
-			var cw_label = null;
-			if (media_tags)
+		let status_without_meta = removeBrackets(status);
+
+		let media_ids = [];
+		let cw_label = null;
+		let alt_tags = [];
+		let meta_tags = matchBrackets(status); // [{img: "https://imgur.com/123tgvd"}, {svg: "<svg>....</svg>"}, ...]
+
+		if (!_.isEmpty(meta_tags)) {
+			console.log("Processing meta_tags...");
+			console.dir(meta_tags);
+			cw_label = meta_tags.find(tag=>_(tag).keys().first() == "cut"); // we take the first CUT, or leave it undefined
+			alt_tags = meta_tags.filter(tag=>_(tag).keys().first() == "alt"); // we take all ALT tags, in sequence
+			let media = meta_tags.filter(tag=>_(["img","svg"]).includes(Object.keys(tag)[0])); // we take all IMG or SVG tags, in sequence
+
+			if (!_.isEmpty(cw_label) ) { console.log(`Got CUT: ${cw_label}`); cw_label = cw_label.cut; }
+			if (!_.isEmpty(alt_tags) ) { console.log(`Got ALT: ${alt_tags.map(el=>el.alt).join(" ;;; \n")}`); }
+
+			media_ids = _.map(media, (tagObject, index) => {
+				let tagType = _(tagObject).keys().first();
+				let tagContent = _(tagObject).values().first();
+
+				if (tagType == "img") {
+					let description = alt_tags[_.min([index, alt_tags.length-1])]; // take matching index (or last) ALT tag
+					if (_.has(description, "alt")) { description = description.alt; } // or fallback to undefined
+					return fetch_img(tagContent, description, M);
+				}
+				else if (tagType == "svg") {
+					let description = alt_tags[_.min([index, alt_tags.length-1])]; // take matching index (or last) ALT tag
+					if (_.has(description, "alt")) { description = description.alt; } // or fallback to undefined
+					return generate_svg(tagContent, description, M);
+				}
+			});
+		} else {
+			console.log("No meta_tags. Passing empty media_ids[]");
+			media_ids = [];
+		}
+
+		return Promise.all(media_ids).then((ids) => {
+			// Once we have all the media_ids generated
+			let params = {status: status_without_meta};
+
+			if (!_.isEmpty(ids)) {
+				params.media_ids = ids
+			}
+
+			if (!_.isEmpty(cw_label)) {
+				params.spoiler_text = cw_label;
+			}
+
+			params.sensitive = process.env.IS_SENSITIVE;
+
+			console.log(`Going to post with:`);
+			console.dir(params);
+
+			return M.post('/statuses', params);
+		}).catch(err => {
+			if (err === undefined)
 			{
-
-
-				async.parallel(media_tags.map(function(match){
-					
-					var unescapeOpenBracket = /\\{/g;
-					var unescapeCloseBracket = /\\}/g;
-					match = match.replace(unescapeOpenBracket, "{");
-					match = match.replace(unescapeCloseBracket, "}");
-
-
-					if (match.indexOf("svg ") === 1)
-					{
-						return _.partial(generate_svg, match.substr(5,match.length - 6), null, M);
-					}
-					else if (match.indexOf("img ") === 1)
-					{
-						return _.partial(fetch_img, match.substr(5, match.length - 6), null, M);
-					}
-//					else if (match.indexOf("cut ") === 1)
-//					{
-//						cw_label = match.substr(5);
-//					}
-//					else if (match.indexOf("alt ") === 1)
-//					{
-//						// no-op
-//						console.log(`alt text will be: ${match.substr(5, match.length - 6)}`);
-//					}
-					else
-					{
-						return function(cb){
-							cb("error {" + match.substr(1,4) + "... not recognized");
-						}
-					}
-				}),
-				function(err, results)
-				{
-					if (err)
-					{
-						if (err === undefined)  
-				  		{
-							// placeholder for error parsing logic
-							return;
-						}
-				  		else
-				  		{
-				  			
-							console.log("error during media_tag parsing/generation");
-							console.log(err);
-							recurse_retry(tries_remaining - 1, status, M);
-							return;
-				  		}
-
-					}
-
-		  			var params = { status: status_without_image, media_ids: results, sensitive: process.env.IS_SENSITIVE };
-					if (cw_label !== null) { params['spoiler_text'] = cw_label; }
-					M.post('/statuses', params, function(err, data, response) {
-						if (err)
-						{
-						  	if (err === undefined)
-						  	{
-								//placeholder for error parsing logic
-								process.exit(1);
-					  		}
-					  		else
-					  		{
-					  			console.error("on submitting status with meta, mastodon returned error " + err['code'] + " " + JSON.stringify(err, null, 2));  
-					  			console.log("on submitting status with meta, mastodon returned error " + err['code'] + " : " + err['message']);
-					  			
-						  		process.exit(1);
-					  		}
-						  	
-						 
-						}
-
-					});
-				});
-
+				// placeholder for error parsing logic
+				console.error("This should never happen. Call a priest.");
+				return;
 			}
 			else
 			{
-				let params = { status: status };
-				if (cw_label !== null) { params['spoiler_text'] = cw_label; }
-				M.post('/statuses', params, function(err, data, response) {
-					if (err)
-					{
-					  	if (err === undefined)
-					  	{
-					  		//placeholder for error parsing logic
-						  	process.exit(1);
-					  	}
-				  		else
-				  		{
-				  			console.error("on submitting plain status, mastodon returned error " + err['code'] + JSON.stringify(err, null, 2));  
-					  		console.log("on submitting plain status, mastodon twitter returned error " + err['code'] + " : " + err['message']);  
-				  			
-						  	process.exit(1);
-				  		}
-					  	
-					 
-					}
-
-				});
+				console.log("error during media_tag parsing/generation or posting status:");
+				console.log(err);
+				recurse_retry(tries_remaining - 1, status, M);
+				return;
 			}
-		
-			
-		}
-		catch (e)
-		{
-			if (tries_remaining <= 4)
-			{
-				console.log("error generating status (retrying)\nerror: " + e.stack);
-			}
-			recurse_retry(tries_remaining - 1, status, M);
-		}
-		
+		});
 	}
-	
 };
 
 
