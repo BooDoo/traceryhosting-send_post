@@ -61,8 +61,8 @@ var uploadMedia = function(readStream, description="", M)
 }
 
 var prepareTag = function(tag) {
-	const knownTags = ["img", "svg", "cut", "alt", "hide"];
-	let match = tag.match(/^\{((?:img|svg|cut|alt) |hide)(.*)\}/);
+	const knownTags = ["img", "svg", "cut", "alt", "hide", "show"];
+	let match = tag.match(/^\{((?:img|svg|cut|alt) |hide|show)(.*)\}/);
 	if ( match && match[1] && _.includes(knownTags, match[1].trim()) ) {
 		let tagType = match[1].trim();
 		let tagContent = match[2];
@@ -135,6 +135,7 @@ var recurse_retry = function(tries_remaining, status, M)
 		let cw_label = null;
 		let alt_tags = [];
 		let hide_media = null;
+		let show_media = null;
 		let meta_tags = matchBrackets(status); // [{img: "https://imgur.com/123tgvd"}, {svg: "<svg>....</svg>"}, ...]
 
 		if (!_.isEmpty(meta_tags)) {
@@ -143,9 +144,26 @@ var recurse_retry = function(tries_remaining, status, M)
 			cw_label = meta_tags.find(tag=>_(tag).keys().first() == "cut"); // we take the first CUT, or leave it undefined
 			alt_tags = meta_tags.filter(tag=>_(tag).keys().first() == "alt"); // we take all ALT tags, in sequence
 			hide_media = meta_tags.find(tagObject=>_.has(tagObject, "hide")); // undefined or [{"hide": ""...}]
+			show_media = meta_tags.find(tagObject=>_.has(tagObject, "show"));
 			let media = meta_tags.filter(tag=>_(["img","svg"]).includes(Object.keys(tag)[0])); // we take all IMG or SVG tags, in sequence
 
-			if (!_.isEmpty(cw_label) ) { console.log(`Got CUT: ${cw_label}`); cw_label = cw_label.cut; }
+			if (hide_media && show_media) {
+				hide_media = true; // both given explicitly, prefer to HIDE
+				show_media = false;
+			}
+			else if (show_media) {
+				hide_media = false;
+			}
+			else if (hide_media) {
+				show_media = false;
+			}
+			else {
+				// nether show nor hide given explicitly, look at standard inheritance
+				hide_media = hide_media || process.env.IS_SENSITIVE;
+				hide_media = hide_media || !_.isEmpty(cw_label);
+			}
+
+			if (!_.isEmpty(cw_label) ) { console.log(`Got CUT: ${cw_label}`); }
 			if (!_.isEmpty(alt_tags) ) { console.log(`Got ALT: ${alt_tags.map(el=>el.alt).join(" ;;; \n")}`); }
 			if (hide_media) { console.log(`Manually overriding and flagging media as sensitive`); }
 
@@ -181,7 +199,7 @@ var recurse_retry = function(tries_remaining, status, M)
 				params.spoiler_text = cw_label['cut'];
 			}
 
-			params.sensitive = hide_media || process.env.IS_SENSITIVE;
+			params.sensitive = hide_media;
 
 			console.log(`Going to post with:`);
 			console.dir(params);
