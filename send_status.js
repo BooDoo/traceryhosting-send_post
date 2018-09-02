@@ -54,7 +54,7 @@ var fetch_img = async function(url, description='', M)
 var uploadMedia = function(readStream, description="", M)
 {
 	let params = {file: readStream};
-	if ( description !== "" && description !== null ) {
+	if ( !_.isEmpty(description) ) {
 		params.description = description;
 	}
 	return M.post('/media', params).then(res=>res.data['id']);
@@ -63,8 +63,8 @@ var uploadMedia = function(readStream, description="", M)
 var prepareTag = function(tag) {
 	const knownTags = ["img", "svg", "cut", "alt", "hide"];
 	let match = tag.match(/^\{((?:img|svg|cut|alt) |hide)(.*)\}/);
-	if ( match && match[1] && _.includes(knownTags, match[1]) ) {
-		let tagType = match[1];
+	if ( match && match[1] && _.includes(knownTags, match[1].trim()) ) {
+		let tagType = match[1].trim();
 		let tagContent = match[2];
 
 		const unescapeOpenBracket = /\\{/g;
@@ -142,7 +142,7 @@ var recurse_retry = function(tries_remaining, status, M)
 			console.dir(meta_tags);
 			cw_label = meta_tags.find(tag=>_(tag).keys().first() == "cut"); // we take the first CUT, or leave it undefined
 			alt_tags = meta_tags.filter(tag=>_(tag).keys().first() == "alt"); // we take all ALT tags, in sequence
-			hide_media = meta_tags.find(tagObject=>_.has(tagObject, "hide")).length; // 0 or 1
+			hide_media = meta_tags.find(tagObject=>_.has(tagObject, "hide")); // undefined or [{"hide": ""...}]
 			let media = meta_tags.filter(tag=>_(["img","svg"]).includes(Object.keys(tag)[0])); // we take all IMG or SVG tags, in sequence
 
 			if (!_.isEmpty(cw_label) ) { console.log(`Got CUT: ${cw_label}`); cw_label = cw_label.cut; }
@@ -150,8 +150,8 @@ var recurse_retry = function(tries_remaining, status, M)
 			if (hide_media) { console.log(`Manually overriding and flagging media as sensitive`); }
 
 			media_ids = _.map(media, (tagObject, index) => {
-				let tagType = _(tagObject).keys().first();
-				let tagContent = _(tagObject).values().first();
+				let tagType, tagContent;
+				[tagType, tagContent] = _.pairs(tagObject)[0];
 
 				if (tagType == "img") {
 					let description = alt_tags[_.min([index, alt_tags.length-1])]; // take matching index (or last) ALT tag
@@ -178,7 +178,7 @@ var recurse_retry = function(tries_remaining, status, M)
 			}
 
 			if (!_.isEmpty(cw_label)) {
-				params.spoiler_text = cw_label;
+				params.spoiler_text = cw_label['cut'];
 			}
 
 			params.sensitive = hide_media || process.env.IS_SENSITIVE;
