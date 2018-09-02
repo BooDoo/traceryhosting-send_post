@@ -17,8 +17,8 @@ var fs = require('fs');
 _.mixin({
 	guid : function(){
 	  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-	    var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
-	    return v.toString(16);
+		var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+		return v.toString(16);
 	  });
 	}
 });
@@ -89,7 +89,7 @@ var matchBrackets = function(text) {
   
   // simple utility function
   function reverseString(s) {
-    return s.split('').reverse().join('');
+	return s.split('').reverse().join('');
   }
 
   // this is an inverstion of the natural order for this RegEx:
@@ -98,10 +98,10 @@ var matchBrackets = function(text) {
   text = reverseString(text);
   var matches = text.match(bracketsRe);
   if(matches === null) {
-    return null;
+	return null;
   }
   else {
-    return matches.map(reverseString).reverse().map(prepareTag);
+	return matches.map(reverseString).reverse().map(prepareTag);
   }
 }
 
@@ -110,7 +110,7 @@ function removeBrackets (text) {
   
   // simple utility function
   var reverseString = function(s) {
-    return s.split('').reverse().join('');
+	return s.split('').reverse().join('');
   }
 
   // this is an inverstion of the natural order for this RegEx:
