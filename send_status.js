@@ -4,6 +4,7 @@
 var fs = require('fs');
 
 var _ = require('lodash');
+_.pairs = _.toPairs;
 
 var Mastodon = require('mastodon-api');
 const os = require('os');
@@ -130,6 +131,7 @@ var recurse_retry = function(tries_remaining, status, M)
 	else
 	{
 		let status_without_meta = removeBrackets(status);
+		console.log(status);
 
 		let media_ids = [];
 		let cw_label = null;
@@ -139,8 +141,7 @@ var recurse_retry = function(tries_remaining, status, M)
 		let meta_tags = matchBrackets(status); // [{img: "https://imgur.com/123tgvd"}, {svg: "<svg>....</svg>"}, ...]
 
 		if (!_.isEmpty(meta_tags)) {
-			console.log("Processing meta_tags...");
-			console.dir(meta_tags);
+			// console.dir(meta_tags);
 			cw_label = meta_tags.find(tag=>_(tag).keys().first() == "cut"); // we take the first CUT, or leave it undefined
 			alt_tags = meta_tags.filter(tag=>_(tag).keys().first() == "alt"); // we take all ALT tags, in sequence
 			hide_media = meta_tags.find(tagObject=>_.has(tagObject, "hide")); // undefined or [{"hide": ""...}]
@@ -162,10 +163,6 @@ var recurse_retry = function(tries_remaining, status, M)
 				hide_media = hide_media || process.env.IS_SENSITIVE;
 				hide_media = hide_media || !_.isEmpty(cw_label);
 			}
-
-			if (!_.isEmpty(cw_label) ) { console.log(`Got CUT: ${cw_label}`); }
-			if (!_.isEmpty(alt_tags) ) { console.log(`Got ALT: ${alt_tags.map(el=>el.alt).join(" ;;; \n")}`); }
-			if (hide_media) { console.log(`Manually overriding and flagging media as sensitive`); }
 
 			media_ids = _.map(media, (tagObject, index) => {
 				let tagType, tagContent;
