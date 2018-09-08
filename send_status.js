@@ -11,7 +11,7 @@ const os = require('os');
 const path = require('path');
 
 const request = require('request');
-var svg2png = require('svg2png');
+const svgConvert = require('convert-svg-to-png').convert;
 var async = require('async');
 var fs = require('fs');
 
@@ -42,7 +42,7 @@ var send_status = function(status)
 var generate_svg = async function(svg_text, description='', M)
 {
 		let TMP_PATH = path.join(os.tmpdir(), `${_.guid()}.png`);
-		return svg2png(new Buffer(svg_text))
+		return svgConvert(svg_text)
 		.then(buffer=> fs.writeFileSync(TMP_PATH, buffer))
 		.then( ()=> uploadMedia(fs.createReadStream(TMP_PATH), description, M));
 }
