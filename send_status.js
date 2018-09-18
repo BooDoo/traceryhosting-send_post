@@ -133,11 +133,15 @@ var recurse_retry = function(tries_remaining, status, M)
 		let status_without_meta = removeBrackets(status);
 		console.log(status);
 
+		const VISIBILITIES = ["public", "unlisted", "private", "direct"];
+
 		let media_ids = [];
 		let cw_label = null;
 		let alt_tags = [];
 		let hide_media = null;
 		let show_media = null;
+		let meta_visibility = null;
+		let visibility = null;
 		let meta_tags = matchBrackets(status); // [{img: "https://imgur.com/123tgvd"}, {svg: "<svg>....</svg>"}, ...]
 
 		if (!_.isEmpty(meta_tags)) {
@@ -179,6 +183,13 @@ var recurse_retry = function(tries_remaining, status, M)
 					return generate_svg(tagContent, description, M);
 				}
 			});
+
+			// mutex visibility tags, prefer privacy
+			meta_visibility = _.findLast(VISIBILITIES, vis=>
+						meta_tags.find(tagObject=>
+							tagObject.hasOwnProperty(vis)
+			));
+
 		} else {
 			console.log("No meta_tags. Passing empty media_ids[]");
 			media_ids = [];
@@ -197,6 +208,7 @@ var recurse_retry = function(tries_remaining, status, M)
 			}
 
 			params.sensitive = hide_media;
+			params.visibility = meta_visibility || process.env.VISIBILITY;
 
 			console.log(`Going to post with:`);
 			console.dir(params);
