@@ -4,7 +4,6 @@
 var fs = require('fs');
 
 var _ = require('lodash');
-_.pairs = _.toPairs;
 
 var Mastodon = require('mastodon-api');
 const os = require('os');
@@ -170,7 +169,7 @@ var recurse_retry = function(tries_remaining, status, M)
 
 			media_ids = _.map(media, (tagObject, index) => {
 				let tagType, tagContent;
-				[tagType, tagContent] = _.pairs(tagObject)[0];
+				[tagType, tagContent] = _.toPairs(tagObject)[0];
 
 				if (tagType == "img") {
 					let description = alt_tags[_.min([index, alt_tags.length-1])]; // take matching index (or last) ALT tag
