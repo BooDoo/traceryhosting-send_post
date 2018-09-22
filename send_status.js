@@ -62,8 +62,8 @@ var uploadMedia = function(readStream, description="", M)
 }
 
 var prepareTag = function(tag) {
-	const knownTags = ["img", "svg", "cut", "alt", "hide", "show"];
-	let match = tag.match(/^\{((?:img|svg|cut|alt) |hide|show)(.*)\}/);
+	const knownTags = ["img", "svg", "cut", "alt", "hide", "show", "public", "unlisted", "private", "direct"];
+	let match = tag.match(/^\{((?:img|svg|cut|alt) |hide|show|public|unlisted|private|direct)(.*)\}/);
 	if ( match && match[1] && _.includes(knownTags, match[1].trim()) ) {
 		let tagType = match[1].trim();
 		let tagContent = match[2];
